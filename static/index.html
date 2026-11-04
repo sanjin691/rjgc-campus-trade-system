@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="校园二手商品交易系统用户管理子系统">
+  <title>校园二手商品交易系统 · 用户管理子系统</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="system-name">
+        <span class="system-title">校园二手商品交易系统</span>
+        <span class="system-subtitle">用户管理子系统</span>
+      </div>
+      <div class="header-user" id="header-user" hidden>
+        <span class="role-badge" id="header-role" hidden>管理员</span>        <span id="header-user-name"></span>
+        <button class="link-button" id="logout-button" type="button">退出登录</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="loading-view" id="loading-view">正在加载，请稍候…</div>
+
+    <nav class="view-nav" id="view-nav" aria-label="功能导航" hidden>
+      <button class="view-nav-button is-active" id="nav-admin" type="button" data-view="admin" aria-current="page">用户管理</button>
+      <button class="view-nav-button" id="nav-profile" type="button" data-view="profile">个人信息</button>
+      <span class="view-nav-spacer" aria-hidden="true"></span>
+      <button class="view-nav-button" id="nav-goods" type="button" data-view="goods">商品管理<em class="view-nav-badge">规划中</em></button>
+      <button class="view-nav-button" id="nav-trade" type="button" data-view="trade">交易管理<em class="view-nav-badge">规划中</em></button>
+    </nav>
+
+    <section class="auth-view" id="auth-view" hidden>
+      <div class="page-heading">
+        <h1 id="auth-title">用户登录</h1>
+        <p id="auth-subtitle">请输入学号或邮箱登录系统。</p>
+      </div>
+
+      <div class="panel auth-panel">
+        <div class="tabs" role="tablist" aria-label="登录或注册">
+          <button class="tab is-active" id="tab-login" type="button" role="tab" aria-selected="true" aria-controls="login-form" data-tab="login">登录</button>
+          <button class="tab" id="tab-register" type="button" role="tab" aria-selected="false" aria-controls="register-form" data-tab="register">注册</button>
+        </div>
+
+        <div class="alert" id="auth-alert" role="alert" hidden></div>
+
+        <form id="login-form" novalidate>
+          <div class="field" data-field="account">
+            <label for="login-account">学号 / 工号或邮箱</label>
+            <input id="login-account" name="account" type="text" maxlength="120" autocomplete="username" placeholder="请输入学号 / 工号或邮箱" required>
+            <p class="field-error" data-error-for="account"></p>
+          </div>
+          <div class="field" data-field="password">
+            <label for="login-password">密码</label>
+            <input id="login-password" name="password" type="password" maxlength="64" autocomplete="current-password" placeholder="请输入密码" required>
+            <p class="field-error" data-error-for="password"></p>
+          </div>
+          <button class="button button-block" id="login-submit" type="submit">登录</button>
+          <p class="form-switch">还没有账号？<button class="link-button" type="button" data-tab-target="register">立即注册</button></p>
+        </form>
+
+        <form id="register-form" novalidate hidden>
+          <div class="form-grid">
+            <div class="field" data-field="studentNo">
+              <label for="register-studentno">学号 / 工号</label>
+              <input id="register-studentno" name="studentNo" type="text" maxlength="20" autocomplete="username" placeholder="4–20 位字母或数字" required>
+              <p class="field-error" data-error-for="studentNo"></p>
+            </div>
+            <div class="field" data-field="name">
+              <label for="register-name">姓名</label>
+              <input id="register-name" name="name" type="text" maxlength="20" autocomplete="name" placeholder="请输入姓名" required>
+              <p class="field-error" data-error-for="name"></p>
+            </div>
+            <div class="field field-full" data-field="email">
+              <label for="register-email">邮箱</label>
+              <input id="register-email" name="email" type="email" maxlength="120" autocomplete="email" placeholder="请输入邮箱" required>
+              <p class="field-error" data-error-for="email"></p>
+            </div>
+            <div class="field" data-field="phone">
+              <label for="register-phone">手机号 <span class="optional">选填</span></label>
+              <input id="register-phone" name="phone" type="tel" maxlength="11" autocomplete="tel" placeholder="11 位手机号">
+              <p class="field-error" data-error-for="phone"></p>
+            </div>
+            <div class="field" data-field="college">
+              <label for="register-college">学院 <span class="optional">选填</span></label>
+              <input id="register-college" name="college" type="text" maxlength="30" placeholder="例如：计算机学院">
+              <p class="field-error" data-error-for="college"></p>
+            </div>
+            <div class="field field-full" data-field="major">
+              <label for="register-major">专业 <span class="optional">选填</span></label>
+              <input id="register-major" name="major" type="text" maxlength="40" placeholder="例如：软件工程">
+              <p class="field-error" data-error-for="major"></p>
+            </div>
+            <div class="field" data-field="password">
+              <label for="register-password">密码</label>
+              <input id="register-password" name="password" type="password" maxlength="64" autocomplete="new-password" placeholder="至少 8 位，包含字母和数字" required>
+              <p class="field-error" data-error-for="password"></p>
+            </div>
+            <div class="field" data-field="confirmPassword">
+              <label for="register-confirm">确认密码</label>
+              <input id="register-confirm" name="confirmPassword" type="password" maxlength="64" autocomplete="new-password" placeholder="请再次输入密码" required>
+              <p class="field-error" data-error-for="confirmPassword"></p>
+            </div>
+          </div>
+          <button class="button button-block" id="register-submit" type="submit">注册</button>
+          <p class="form-switch">已有账号？<button class="link-button" type="button" data-tab-target="login">返回登录</button></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="profile-view" id="profile-view" hidden>
+      <div class="page-heading">
+        <h1>个人信息</h1>
+        <p>查看并修改你的账号信息，学号不可修改。</p>
+      </div>
+
+      <div class="panel profile-panel">
+        <div class="profile-summary">
+          <div class="avatar" id="profile-avatar" aria-hidden="true"></div>
+          <div class="profile-summary-text">
+            <strong id="profile-display-name"></strong>
+            <span id="profile-display-studentno"></span>
+          </div>
+        </div>
+
+        <div class="alert" id="profile-alert" role="status" hidden></div>
+
+        <form id="profile-form" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="profile-studentno">学号 / 工号</label>
+              <input id="profile-studentno" type="text" disabled>
+            </div>
+            <div class="field">
+              <label for="profile-created">注册时间</label>
+              <input id="profile-created" type="text" disabled>
+            </div>
+            <div class="field" data-field="name">
+              <label for="profile-name">姓名</label>
+              <input id="profile-name" name="name" type="text" maxlength="20" autocomplete="name" required>
+              <p class="field-error" data-error-for="name"></p>
+            </div>
+            <div class="field" data-field="email">
+              <label for="profile-email">邮箱</label>
+              <input id="profile-email" name="email" type="email" maxlength="120" autocomplete="email" required>
+              <p class="field-error" data-error-for="email"></p>
+            </div>
+            <div class="field" data-field="phone">
+              <label for="profile-phone">手机号 <span class="optional">选填</span></label>
+              <input id="profile-phone" name="phone" type="tel" maxlength="11" autocomplete="tel">
+              <p class="field-error" data-error-for="phone"></p>
+            </div>
+            <div class="field" data-field="college">
+              <label for="profile-college">学院 <span class="optional">选填</span></label>
+              <input id="profile-college" name="college" type="text" maxlength="30">
+              <p class="field-error" data-error-for="college"></p>
+            </div>
+            <div class="field field-full" data-field="major">
+              <label for="profile-major">专业 <span class="optional">选填</span></label>
+              <input id="profile-major" name="major" type="text" maxlength="40">
+              <p class="field-error" data-error-for="major"></p>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="button" id="profile-save" type="submit">保存修改</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel security-panel">
+        <div class="panel-title-row">
+          <h2>修改密码</h2>
+          <span class="count-text">忘记密码时请联系管理员重置</span>
+        </div>
+        <div class="alert" id="password-alert" role="status" hidden></div>
+        <form id="password-form" novalidate>
+          <div class="form-grid">
+            <div class="field field-full" data-field="currentPassword">
+              <label for="password-current">当前密码</label>
+              <input id="password-current" type="password" maxlength="64" autocomplete="current-password" required>
+              <p class="field-error" data-error-for="currentPassword"></p>
+            </div>
+            <div class="field" data-field="newPassword">
+              <label for="password-new">新密码</label>
+              <input id="password-new" type="password" maxlength="64" autocomplete="new-password" placeholder="至少 8 位，包含字母和数字" required>
+              <p class="field-error" data-error-for="newPassword"></p>
+            </div>
+            <div class="field" data-field="confirmPassword">
+              <label for="password-confirm">确认新密码</label>
+              <input id="password-confirm" type="password" maxlength="64" autocomplete="new-password" placeholder="请再次输入新密码" required>
+              <p class="field-error" data-error-for="confirmPassword"></p>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="button" id="password-save" type="submit">保存新密码</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="admin-view" id="admin-view" hidden>
+      <div class="page-heading">
+        <h1>用户管理</h1>
+        <p>查看、修改、重置密码或删除用户；学号/工号可由管理员更正。</p>
+      </div>
+
+      <div class="panel admin-panel">
+        <div class="panel-title-row">
+          <h2>全部用户</h2>
+          <div class="panel-title-actions">
+            <span class="count-text" id="admin-user-count"></span>
+            <button class="button button-small" id="admin-create-toggle" type="button">新增管理员账号</button>
+          </div>
+        </div>
+
+        <div class="alert" id="admin-alert" role="status" hidden></div>
+
+        <div class="edit-panel" id="admin-create-panel" hidden>
+          <div class="edit-panel-head">
+            <h3>新增管理员账号</h3>
+            <span>创建后可用学号 / 工号与初始密码登录后台</span>
+          </div>
+          <form id="admin-create-form" novalidate>
+            <div class="form-grid">
+              <div class="field" data-field="studentNo">
+                <label for="admin-create-studentno">学号 / 工号</label>
+                <input id="admin-create-studentno" type="text" maxlength="20" placeholder="4–20 位字母或数字" required>
+                <p class="field-error" data-error-for="studentNo"></p>
+              </div>
+              <div class="field" data-field="name">
+                <label for="admin-create-name">姓名</label>
+                <input id="admin-create-name" type="text" maxlength="20" placeholder="请输入姓名" required>
+                <p class="field-error" data-error-for="name"></p>
+              </div>
+              <div class="field field-full" data-field="email">
+                <label for="admin-create-email">校园邮箱</label>
+                <input id="admin-create-email" type="email" maxlength="120" placeholder="请输入校园邮箱" required>
+                <p class="field-error" data-error-for="email"></p>
+              </div>
+              <div class="field" data-field="password">
+                <label for="admin-create-password">初始密码</label>
+                <input id="admin-create-password" type="password" maxlength="64" autocomplete="new-password" placeholder="至少 8 位，包含字母和数字" required>
+                <p class="field-error" data-error-for="password"></p>
+              </div>
+              <div class="field" data-field="confirmPassword">
+                <label for="admin-create-confirm">确认密码</label>
+                <input id="admin-create-confirm" type="password" maxlength="64" autocomplete="new-password" placeholder="请再次输入密码" required>
+                <p class="field-error" data-error-for="confirmPassword"></p>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="button button-secondary" id="admin-create-cancel" type="button">取消</button>
+              <button class="button" id="admin-create-save" type="submit">创建管理员</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="edit-panel" id="admin-edit-panel" hidden>
+          <div class="edit-panel-head">
+            <h3>编辑用户信息</h3>
+            <span id="admin-edit-target"></span>
+          </div>
+          <form id="admin-edit-form" novalidate>
+            <div class="form-grid">
+              <div class="field" data-field="studentNo">
+                <label for="admin-edit-studentno">学号 / 工号</label>
+                <input id="admin-edit-studentno" type="text" maxlength="20" placeholder="4–20 位字母或数字" required>
+                <p class="field-error" data-error-for="studentNo"></p>
+              </div>
+              <div class="field">
+                <label for="admin-edit-role">账号角色</label>
+                <input id="admin-edit-role" type="text" disabled>
+              </div>
+              <div class="field" data-field="name">
+                <label for="admin-edit-name">姓名</label>
+                <input id="admin-edit-name" type="text" maxlength="20" required>
+                <p class="field-error" data-error-for="name"></p>
+              </div>
+              <div class="field" data-field="email">
+                <label for="admin-edit-email">邮箱</label>
+                <input id="admin-edit-email" type="email" maxlength="120" required>
+                <p class="field-error" data-error-for="email"></p>
+              </div>
+              <div class="field" data-field="phone">
+                <label for="admin-edit-phone">手机号 <span class="optional">选填</span></label>
+                <input id="admin-edit-phone" type="tel" maxlength="11">
+                <p class="field-error" data-error-for="phone"></p>
+              </div>
+              <div class="field" data-field="college">
+                <label for="admin-edit-college">学院 <span class="optional">选填</span></label>
+                <input id="admin-edit-college" type="text" maxlength="30">
+                <p class="field-error" data-error-for="college"></p>
+              </div>
+              <div class="field field-full" data-field="major">
+                <label for="admin-edit-major">专业 <span class="optional">选填</span></label>
+                <input id="admin-edit-major" type="text" maxlength="40">
+                <p class="field-error" data-error-for="major"></p>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="button button-secondary" id="admin-edit-cancel" type="button">取消</button>
+              <button class="button" id="admin-edit-save" type="submit">保存修改</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="edit-panel" id="admin-reset-panel" hidden>
+          <div class="edit-panel-head">
+            <h3>重置用户密码</h3>
+            <span id="admin-reset-target"></span>
+          </div>
+          <form id="admin-reset-form" novalidate>
+            <div class="form-grid">
+              <div class="field" data-field="newPassword">
+                <label for="admin-reset-password">新密码</label>
+                <input id="admin-reset-password" type="password" maxlength="64" autocomplete="new-password" placeholder="至少 8 位，包含字母和数字" required>
+                <p class="field-error" data-error-for="newPassword"></p>
+              </div>
+              <div class="field" data-field="confirmPassword">
+                <label for="admin-reset-confirm">确认新密码</label>
+                <input id="admin-reset-confirm" type="password" maxlength="64" autocomplete="new-password" placeholder="请再次输入新密码" required>
+                <p class="field-error" data-error-for="confirmPassword"></p>
+              </div>
+            </div>
+            <p class="panel-hint">重置后该用户的所有登录状态都会失效，需要用新密码重新登录。</p>
+            <div class="form-actions">
+              <button class="button button-secondary" id="admin-reset-cancel" type="button">取消</button>
+              <button class="button" id="admin-reset-save" type="submit">重置密码</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="user-list" id="admin-user-list">
+          <p class="loading-inline">正在加载用户信息…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="planned-view" id="goods-view" hidden>
+      <div class="page-heading">
+        <h1>商品管理子系统</h1>
+        <p>该子系统暂未实现，内容待补充。</p>
+      </div>
+      <div class="panel planned-panel">
+        <p class="empty-text">暂无内容</p>
+      </div>
+    </section>
+
+    <section class="planned-view" id="trade-view" hidden>
+      <div class="page-heading">
+        <h1>交易管理子系统</h1>
+        <p>该子系统暂未实现，内容待补充。</p>
+      </div>
+      <div class="panel planned-panel">
+        <p class="empty-text">暂无内容</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">校园二手商品交易系统 · 用户管理子系统</div>
+  </footer>
+
+  <noscript><div class="noscript">请启用 JavaScript 后使用本系统。</div></noscript>
+
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
