@@ -35,7 +35,9 @@ import trade
 from database import (
     DEFAULT_ADMIN_PASSWORD,
     DEFAULT_ADMIN_STUDENT_NO,
-    Database,
+    SessionStore,
+    UserStore,
+    initialize_database,
 )
 from security import (
     SESSION_COOKIE,
@@ -207,8 +209,9 @@ class LoginThrottle:
 
 class Application:
     def __init__(self, db_path: str | Path = DEFAULT_DB):
-        self.db = Database(db_path)
-        self.db.initialize()
+        initialize_database(db_path)
+        self.users = UserStore(db_path)
+        self.sessions = SessionStore(db_path)
         self.throttle = LoginThrottle()
 
     def dispatch(self, request: Request) -> Response:
@@ -236,7 +239,7 @@ class Application:
         if not token:
             return
         token_hash = digest_token(token)
-        session = self.db.find_session(token_hash)
+        session = self.sessions.find_session(token_hash)
         if session:
             request.session = session
             request.user = session["user"]
@@ -315,8 +318,8 @@ class Application:
         csrf = new_csrf_token()
         created_at = iso_utc()
         expires = session_expiry()
-        self.db.create_session(user_id, digest_token(token), csrf, iso_utc(expires))
-        user = self.db.get_public_user(user_id)
+        self.sessions.create_session(user_id, digest_token(token), csrf, iso_utc(expires))
+        user = self.users.get_public_user(user_id)
         max_age = int((expires - datetime.now(timezone.utc)).total_seconds())
         response = ok(
             {"user": user, "csrfToken": csrf, "createdAt": created_at},
@@ -332,14 +335,15 @@ class Application:
 def api_register(app: Application, request: Request) -> Response:
     data = validate_registration(request.body)
     errors: dict[str, str] = {}
-    if app.db.student_no_exists(data["student_no"]):
+    taken = app.users.account_taken(student_no=data["student_no"], email=data["email"])
+    if "studentNo" in taken:
         errors["studentNo"] = "该学号已注册"
-    if app.db.email_exists(data["email"]):
+    if "email" in taken:
         errors["email"] = "该邮箱已被使用"
     if errors:
         raise ValidationError(errors)
 
-    user = app.db.create_user(data)
+    user = app.users.create_user(data)
     return ok(
         {"studentNo": user["studentNo"], "name": user["name"]},
         message="注册成功，请登录",
@@ -366,7 +370,7 @@ def api_login(app: Application, request: Request) -> Response:
         minutes = max(1, (retry_after + 59) // 60)
         raise ApiError(429, f"登录尝试次数过多，请在约 {minutes} 分钟后再试")
 
-    row = app.db.get_user_for_login(account)
+    row = app.users.get_user_for_login(account)
     if row is None:
         verify_password(password, DUMMY_PASSWORD_HASH)
         app.throttle.record_failure(throttle_key)
@@ -391,7 +395,7 @@ def api_me(app: Application, request: Request) -> Response:
 @route("POST", r"/api/auth/logout", auth=True)
 def api_logout(app: Application, request: Request) -> Response:
     if request.token_hash:
-        app.db.delete_session(request.token_hash)
+        app.sessions.delete_session(request.token_hash)
     return ok(None, message="已退出登录", headers=[("Set-Cookie", clear_session_cookie())])
 
 
@@ -399,9 +403,12 @@ def api_logout(app: Application, request: Request) -> Response:
 def api_update_profile(app: Application, request: Request) -> Response:
     assert request.user
     data = validate_profile_update(request.body)
-    if app.db.email_exists(data["email"], exclude_user_id=request.user["id"]):
+    taken = app.users.account_taken(
+        email=data["email"], exclude_user_id=request.user["id"]
+    )
+    if "email" in taken:
         raise ValidationError({"email": "该邮箱已被其他用户使用"})
-    user = app.db.update_profile(request.user["id"], data)
+    user = app.users.update_user(request.user["id"], data)
     return ok({"user": user}, message="个人信息已保存")
 
 
@@ -410,30 +417,31 @@ def api_change_password(app: Application, request: Request) -> Response:
     """本人修改密码：必须校验当前密码，改完保留当前会话、踢掉其他设备。"""
     assert request.user
     data = validate_password_change(request.body, require_current=True)
-    stored = app.db.get_password_hash(int(request.user["id"]))
+    stored = app.sessions.get_password_hash(int(request.user["id"]))
     if not stored or not verify_password(data["current_password"], stored):
         raise ValidationError({"currentPassword": "当前密码不正确"})
 
-    app.db.update_password(int(request.user["id"]), data["new_password"])
-    app.db.delete_user_sessions(int(request.user["id"]), keep_token_hash=request.token_hash)
+    app.sessions.update_password(int(request.user["id"]), data["new_password"])
+    app.sessions.delete_user_sessions(int(request.user["id"]), keep_token_hash=request.token_hash)
     return ok(None, message="密码已修改，其他设备已退出登录")
 
 
 @route("GET", r"/api/admin/users", auth=True, admin_only=True)
 def api_admin_users(app: Application, request: Request) -> Response:
-    users = app.db.list_all_users()
+    users = app.users.list_all_users()
     return ok({"items": users, "total": len(users)})
 
 
 @route("PATCH", r"/api/admin/users/(?P<user_id>\d+)", auth=True, admin_only=True)
 def api_admin_update_user(app: Application, request: Request) -> Response:
     target_id = int(request.params["user_id"])
-    target = app.db.get_public_user(target_id)
+    target = app.users.get_public_user(target_id)
     if not target:
         raise ApiError(404, "用户不存在")
 
     data = validate_profile_update(request.body)
-    if app.db.email_exists(data["email"], exclude_user_id=target_id):
+    taken = app.users.account_taken(email=data["email"], exclude_user_id=target_id)
+    if "email" in taken:
         raise ValidationError({"email": "该邮箱已被其他用户使用"})
 
     # 管理员可以修改学号/工号（普通用户不行）：先校验再落库，避免改一半
@@ -442,14 +450,11 @@ def api_admin_update_user(app: Application, request: Request) -> Response:
     if isinstance(raw_student_no, str) and raw_student_no.strip():
         candidate = validate_student_no(raw_student_no)
         if candidate != target["studentNo"]:
-            if app.db.student_no_exists(candidate):
+            if "studentNo" in app.users.account_taken(student_no=candidate):
                 raise ValidationError({"studentNo": "该学号或工号已被使用"})
             new_student_no = candidate
 
-    user = app.db.update_profile(target_id, data)
-    if new_student_no:
-        app.db.update_student_no(target_id, new_student_no)
-        user = app.db.get_public_user(target_id)
+    user = app.users.update_user(target_id, data, student_no=new_student_no)
     return ok({"user": user}, message="用户信息已保存")
 
 
@@ -457,13 +462,13 @@ def api_admin_update_user(app: Application, request: Request) -> Response:
 def api_admin_reset_password(app: Application, request: Request) -> Response:
     """管理员重置指定用户的密码（忘记密码的兜底手段），并强制其重新登录。"""
     target_id = int(request.params["user_id"])
-    target = app.db.get_public_user(target_id)
+    target = app.users.get_public_user(target_id)
     if not target:
         raise ApiError(404, "用户不存在")
 
     data = validate_password_change(request.body, require_current=False)
-    app.db.update_password(target_id, data["new_password"])
-    app.db.delete_user_sessions(target_id)
+    app.sessions.update_password(target_id, data["new_password"])
+    app.sessions.delete_user_sessions(target_id)
     return ok(
         {"studentNo": target["studentNo"]},
         message="密码已重置，请通知该用户使用新密码登录",
@@ -477,13 +482,13 @@ def api_admin_delete_user(app: Application, request: Request) -> Response:
     target_id = int(request.params["user_id"])
     if target_id == int(request.user["id"]):
         raise ApiError(400, "不能删除当前登录的账号")
-    target = app.db.get_public_user(target_id)
+    target = app.users.get_public_user(target_id)
     if not target:
         raise ApiError(404, "用户不存在")
-    if target["role"] == "admin" and app.db.count_admins() <= 1:
+    if target["role"] == "admin" and app.users.count_admins() <= 1:
         raise ApiError(400, "至少要保留一名管理员")
 
-    app.db.delete_user(target_id)
+    app.users.delete_user(target_id)
     return ok(None, message=f"已删除用户 {target['studentNo']}")
 
 
@@ -492,14 +497,15 @@ def api_admin_create_user(app: Application, request: Request) -> Response:
     """管理员在后台新增管理员账号（复用注册校验，角色固定为 admin）。"""
     data = validate_registration(request.body)
     errors: dict[str, str] = {}
-    if app.db.student_no_exists(data["student_no"]):
+    taken = app.users.account_taken(student_no=data["student_no"], email=data["email"])
+    if "studentNo" in taken:
         errors["studentNo"] = "该学号或工号已注册"
-    if app.db.email_exists(data["email"]):
+    if "email" in taken:
         errors["email"] = "该邮箱已被使用"
     if errors:
         raise ValidationError(errors)
 
-    user = app.db.create_user(data, role="admin")
+    user = app.users.create_user(data, role="admin")
     return ok({"user": user}, message="管理员账号已创建", status=201)
 
 

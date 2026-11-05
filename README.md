@@ -128,7 +128,7 @@ HTTP 层      RequestHandler：解析请求、限流、安全响应头
    ▼
 业务处理     api_* 函数：校验（validators）→ 加密/令牌（security）→ 读写（database）
    ▼
-数据层      Database：参数化 SQL、事务、唯一约束；SQLite（WAL）
+数据层      UserStore / SessionStore：参数化 SQL、事务、唯一约束；SQLite（WAL）
 ```
 
 ### 关键设计取舍
@@ -307,7 +307,7 @@ SQLite 单写入者，短时间大量写入时可能出现；程序已设置 5 �
 ```text
 campus-trade-system/
 ├─ app.py                  # HTTP 服务、路由、鉴权、限流与业务接口
-├─ database.py             # 用户表、会话表、默认管理员与数据访问
+├─ database.py             # 数据访问：UserStore（用户）/ SessionStore（会话与凭据）
 ├─ security.py             # 密码哈希、会话令牌、时间工具
 ├─ validators.py           # 注册、资料、密码与学号校验
 ├─ goods.py                # 商品管理子系统（空占位，内容待补充）
