@@ -85,6 +85,7 @@ DUMMY_PASSWORD_HASH = hash_password("not-a-real-password")
 
 
 def parse_cookies(header_value: str) -> dict[str, str]:
+    """把 Cookie 请求头解析成字典，忽略空键。"""
     cookies: dict[str, str] = {}
     for part in header_value.split(";"):
         if "=" not in part:
@@ -121,6 +122,7 @@ class Response:
 
 
 def ok(data=None, message: str | None = None, status: int = 200, headers=None) -> Response:
+    """构造成功响应：{ok: True, message?, data}。"""
     payload: dict = {"ok": True}
     if message:
         payload["message"] = message
@@ -129,6 +131,7 @@ def ok(data=None, message: str | None = None, status: int = 200, headers=None) -
 
 
 def error(status: int, message: str, errors: dict[str, str] | None = None) -> Response:
+    """构造失败响应：{ok: False, message, errors?}。"""
     payload: dict = {"ok": False, "message": message}
     if errors:
         payload["errors"] = errors
@@ -137,6 +140,7 @@ def error(status: int, message: str, errors: dict[str, str] | None = None) -> Re
 
 class ApiError(Exception):
     def __init__(self, status: int, message: str):
+        """保存状态码与错误信息。"""
         super().__init__(message)
         self.status = status
         self.message = message
@@ -158,9 +162,11 @@ ROUTES: list[Route] = []
 
 
 def route(method: str, pattern: str, auth: bool = False, admin_only: bool = False):
+    """路由装饰器：把方法、正则与处理函数登记进 ROUTES。"""
     compiled = re.compile(pattern)
 
     def decorator(handler):
+        """登记路由并原样返回处理函数。"""
         ROUTES.append(Route(method, compiled, handler, auth, admin_only))
         return handler
 
@@ -174,12 +180,14 @@ class LoginThrottle:
     """同一 IP + 账号连续失败 5 次后暂停 10 分钟。"""
 
     def __init__(self, max_failures: int = 5, window_seconds: int = 600):
+        """设置最大失败次数与统计窗口（秒）。"""
         self.max_failures = max_failures
         self.window_seconds = window_seconds
         self.failures: dict[str, list[float]] = {}
         self.lock = threading.Lock()
 
     def retry_after(self, key: str) -> int:
+        """返回还需等待的秒数；0 表示当前可尝试登录。"""
         now = time.monotonic()
         with self.lock:
             attempts = [t for t in self.failures.get(key, []) if now - t < self.window_seconds]
@@ -193,6 +201,7 @@ class LoginThrottle:
             return 0
 
     def record_failure(self, key: str) -> None:
+        """记录一次登录失败，并清理窗口外的旧记录。"""
         now = time.monotonic()
         with self.lock:
             attempts = [t for t in self.failures.get(key, []) if now - t < self.window_seconds]
@@ -200,6 +209,7 @@ class LoginThrottle:
             self.failures[key] = attempts
 
     def reset(self, key: str) -> None:
+        """登录成功后清除该键的失败记录。"""
         with self.lock:
             self.failures.pop(key, None)
 
@@ -209,12 +219,14 @@ class LoginThrottle:
 
 class Application:
     def __init__(self, db_path: str | Path = DEFAULT_DB):
+        """初始化数据库、两个仓储与登录限流器。"""
         initialize_database(db_path)
         self.users = UserStore(db_path)
         self.sessions = SessionStore(db_path)
         self.throttle = LoginThrottle()
 
     def dispatch(self, request: Request) -> Response:
+        """请求入口：认证 → 路由 → 统一异常映射。"""
         request.cookies = parse_cookies(request.headers.get("Cookie", ""))
         self._authenticate(request)
 
@@ -235,6 +247,7 @@ class Application:
         return response
 
     def _authenticate(self, request: Request) -> None:
+        """按 Cookie 中的令牌恢复登录态；失效时打标记以便清除 Cookie。"""
         token = request.cookies.get(SESSION_COOKIE)
         if not token:
             return
@@ -248,6 +261,7 @@ class Application:
             request.invalid_session_cookie = True
 
     def _route_request(self, request: Request) -> Response:
+        """匹配路由、校验来源/内容类型/鉴权，然后调用业务函数。"""
         path_matches = [r for r in ROUTES if r.pattern.fullmatch(request.path)]
         if not path_matches:
             raise ApiError(404, "接口不存在")
@@ -282,6 +296,7 @@ class Application:
 
     @staticmethod
     def _check_origin(request: Request) -> None:
+        """校验 Origin 与 Host 一致，作为 CSRF 的第二道防线。"""
         origin = request.headers.get("Origin", "")
         if not origin or origin == "null":
             return
@@ -295,6 +310,7 @@ class Application:
 
     @staticmethod
     def _check_content_type(request: Request) -> None:
+        """写操作必须是 application/json（DELETE 除外）。"""
         if request.method not in {"POST", "PUT", "PATCH"}:
             return
         content_type = request.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -303,6 +319,7 @@ class Application:
 
     @staticmethod
     def _parse_json_body(request: Request) -> dict:
+        """把请求体解析为 dict，非法 JSON 抛 400。"""
         if not request.raw_body:
             return {}
         try:
@@ -314,6 +331,7 @@ class Application:
         return parsed
 
     def _issue_session(self, request: Request, user_id: int) -> Response:
+        """生成令牌与 CSRF、写会话表并下发 Cookie。"""
         token = new_session_token()
         csrf = new_csrf_token()
         created_at = iso_utc()
@@ -333,6 +351,7 @@ class Application:
 
 @route("POST", r"/api/auth/register")
 def api_register(app: Application, request: Request) -> Response:
+    """注册：校验字段 → 查重 → 写库，返回 201。"""
     data = validate_registration(request.body)
     errors: dict[str, str] = {}
     taken = app.users.account_taken(student_no=data["student_no"], email=data["email"])
@@ -353,6 +372,7 @@ def api_register(app: Application, request: Request) -> Response:
 
 @route("POST", r"/api/auth/login")
 def api_login(app: Application, request: Request) -> Response:
+    """登录：限流检查 → 查用户 → 校验密码 → 签发会话。"""
     account = request.body.get("account", "")
     password = request.body.get("password", "")
     errors: dict[str, str] = {}
@@ -388,12 +408,14 @@ def api_login(app: Application, request: Request) -> Response:
 
 @route("GET", r"/api/auth/me", auth=True)
 def api_me(app: Application, request: Request) -> Response:
+    """返回当前登录用户与 CSRF 令牌。"""
     assert request.session and request.user
     return ok({"user": request.user, "csrfToken": request.session["csrfToken"]})
 
 
 @route("POST", r"/api/auth/logout", auth=True)
 def api_logout(app: Application, request: Request) -> Response:
+    """退出登录：删除当前会话并清除 Cookie。"""
     if request.token_hash:
         app.sessions.delete_session(request.token_hash)
     return ok(None, message="已退出登录", headers=[("Set-Cookie", clear_session_cookie())])
@@ -401,6 +423,7 @@ def api_logout(app: Application, request: Request) -> Response:
 
 @route("PATCH", r"/api/users/me", auth=True)
 def api_update_profile(app: Application, request: Request) -> Response:
+    """本人修改资料（不含学号/工号与角色）。"""
     assert request.user
     data = validate_profile_update(request.body)
     taken = app.users.account_taken(
@@ -428,12 +451,14 @@ def api_change_password(app: Application, request: Request) -> Response:
 
 @route("GET", r"/api/admin/users", auth=True, admin_only=True)
 def api_admin_users(app: Application, request: Request) -> Response:
+    """管理员查看全部用户。"""
     users = app.users.list_all_users()
     return ok({"items": users, "total": len(users)})
 
 
 @route("PATCH", r"/api/admin/users/(?P<user_id>\d+)", auth=True, admin_only=True)
 def api_admin_update_user(app: Application, request: Request) -> Response:
+    """管理员修改任意用户资料，可一并更正学号/工号。"""
     target_id = int(request.params["user_id"])
     target = app.users.get_public_user(target_id)
     if not target:
@@ -524,6 +549,7 @@ def _register_planned_subsystem(meta: dict) -> None:
     pattern = re.compile(rf"{meta['routePrefix']}(?:/.*)?")
 
     def handler(app: Application, request: Request, _meta: dict = meta) -> Response:
+        """占位子系统：统一返回 501 并说明实现位置。"""
         raise ApiError(
             501,
             f"{_meta['name']}尚未实现（{_meta['statusLabel']}）：本期只交付用户管理子系统，"
@@ -540,6 +566,7 @@ _register_planned_subsystem(trade.meta())
 
 @route("GET", r"/api/health")
 def api_health(app: Application, request: Request) -> Response:
+    """健康检查，供部署探活使用。"""
     return ok({"status": "ok"})
 
 
@@ -547,6 +574,7 @@ def api_health(app: Application, request: Request) -> Response:
 
 
 def session_cookie(token: str, max_age: int | None) -> str:
+    """构造会话 Cookie（HttpOnly、SameSite=Lax，可选 Secure）。"""
     parts = [f"{SESSION_COOKIE}={token}", "Path=/", "HttpOnly", "SameSite=Lax"]
     if max_age is not None:
         parts.append(f"Max-Age={max_age}")
@@ -556,6 +584,7 @@ def session_cookie(token: str, max_age: int | None) -> str:
 
 
 def clear_session_cookie() -> str:
+    """构造用于清除会话的 Cookie。"""
     parts = [
         f"{SESSION_COOKIE}=",
         "Path=/",
@@ -595,27 +624,35 @@ class RequestHandler(BaseHTTPRequestHandler):
     sys_version = ""
 
     def do_GET(self) -> None:  # noqa: N802
+        """把 GET 请求交给统一的 _handle 处理。"""
         self._handle("GET")
 
     def do_HEAD(self) -> None:  # noqa: N802
+        """把 HEAD 请求交给统一的 _handle 处理。"""
         self._handle("HEAD")
 
     def do_POST(self) -> None:  # noqa: N802
+        """把 POST 请求交给统一的 _handle 处理。"""
         self._handle("POST")
 
     def do_PATCH(self) -> None:  # noqa: N802
+        """把 PATCH 请求交给统一的 _handle 处理。"""
         self._handle("PATCH")
 
     def do_PUT(self) -> None:  # noqa: N802
+        """把 PUT 请求交给统一的 _handle 处理。"""
         self._handle("PUT")
 
     def do_DELETE(self) -> None:  # noqa: N802
+        """把 DELETE 请求交给统一的 _handle 处理。"""
         self._handle("DELETE")
 
     def do_OPTIONS(self) -> None:  # noqa: N802
+        """不支持跨域预检，直接返回 405。"""
         self._send_json(error(405, "不支持跨域请求"))
 
     def _handle(self, method: str) -> None:
+        """区分 API 与静态资源，并做方法白名单。"""
         try:
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
@@ -634,6 +671,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json(error(405, "请求方法不支持"))
 
     def _handle_api(self, method: str, path: str, query_string: str) -> None:
+        """读取并限制请求体大小，组装 Request 后交给 dispatch。"""
         raw_body = b""
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
@@ -663,6 +701,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._send_json(self.application.dispatch(request))
 
     def _serve_static(self, path: str, include_body: bool = True) -> None:
+        """从 static/ 目录提供页面与静态资源，阻止目录穿越。"""
         if path in {"/", "/index.html"}:
             relative = "index.html"
         elif path.startswith("/static/"):
@@ -705,6 +744,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
 
     def _send_static_not_found(self, include_body: bool = True) -> None:
+        """返回 404 页面。"""
         body = "<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><title>404</title><p>页面不存在，<a href=\"/\">返回首页</a></p></html>".encode("utf-8")
         self.send_response(404)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -717,6 +757,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _send_json(self, response: Response) -> None:
+        """输出 JSON 响应并附加安全响应头。"""
         body = json.dumps(
             response.payload, ensure_ascii=False, separators=(",", ":")
         ).encode("utf-8")
@@ -737,6 +778,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
+        """只记录 /api/ 访问日志，避免静态资源刷屏。"""
         if self.path.startswith("/api/"):
             sys.stderr.write("%s - %s\n" % (self.log_date_time_string(), format % args))
 
@@ -746,6 +788,7 @@ def create_server(
     port: int = 8000,
     db_path: str | Path = DEFAULT_DB,
 ) -> ThreadingHTTPServer:
+    """创建应用与线程化 HTTP 服务，返回可 serve_forever 的实例。"""
     application = Application(db_path=db_path)
     handler = type("BoundRequestHandler", (RequestHandler,), {"application": application})
     server = ThreadingHTTPServer((host, port), handler)
@@ -754,6 +797,7 @@ def create_server(
 
 
 def main() -> None:
+    """解析命令行参数、准备数据库、打印访问信息并启动服务。"""
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")

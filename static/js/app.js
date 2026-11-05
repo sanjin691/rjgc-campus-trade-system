@@ -517,6 +517,13 @@ async function submitAdminReset(event) {
     confirmPassword: ui.adminResetConfirm.value,
   };
 
+  // 二次确认：重置密码会让该用户所有登录失效，属于不可撤回的高危操作
+  const confirmed = window.confirm(
+    `确定要重置「${target?.name || "该用户"}（${target?.studentNo || ""}）」的密码吗？\n`
+      + "重置后该用户所有登录状态立即失效，需用新密码重新登录。",
+  );
+  if (!confirmed) return;
+
   setLoading(ui.adminResetSave, true, "重置中…");
   try {
     await api.post(`/api/admin/users/${state.resettingUserId}/password`, payload);
@@ -536,10 +543,17 @@ async function submitAdminReset(event) {
 async function deleteUser(userId) {
   const user = state.adminUsers.find((item) => item.id === userId);
   if (!user) return;
-  const confirmed = window.confirm(
-    `确定删除用户「${user.name}（${user.studentNo}）」吗？\n删除后该账号无法登录，且不可恢复。`,
+
+  // 高危且不可逆：要求输入该用户的学号/工号，避免误点或批量误删
+  const typed = window.prompt(
+    `删除不可恢复。\n请输入该用户的学号/工号「${user.studentNo}」以确认删除：`,
+    "",
   );
-  if (!confirmed) return;
+  if (typed === null) return;
+  if (typed.trim().toUpperCase() !== user.studentNo.toUpperCase()) {
+    setAlert(ui.adminAlert, "学号/工号不一致，已取消删除。");
+    return;
+  }
 
   setAlert(ui.adminAlert, "");
   try {

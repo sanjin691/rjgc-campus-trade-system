@@ -12,17 +12,20 @@ CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 class ValidationError(Exception):
     def __init__(self, errors: dict[str, str], message: str = "请检查填写内容"):
+        """保存字段级错误与整体提示。"""
         super().__init__(message)
         self.errors = errors
         self.message = message
 
 
 def _text(data: dict, key: str) -> str:
+    """取字符串字段并去除首尾空白，非法类型返回空串。"""
     value = data.get(key, "")
     return value.strip() if isinstance(value, str) else ""
 
 
 def password_problem(password: str) -> str | None:
+    """检查密码强度，返回具体原因；合格时返回 None。"""
     if len(password) < 8:
         return "密码至少需要 8 个字符"
     if len(password) > 64:
@@ -35,6 +38,7 @@ def password_problem(password: str) -> str | None:
 
 
 def validate_registration(data: dict) -> dict:
+    """校验注册数据并返回规范化后的字典，不合法时抛 ValidationError。"""
     errors: dict[str, str] = {}
 
     student_no = _text(data, "studentNo").upper()
@@ -99,6 +103,7 @@ def validate_registration(data: dict) -> dict:
 
 
 def validate_profile_update(data: dict) -> dict:
+    """校验资料修改数据（不含学号与密码）。"""
     errors: dict[str, str] = {}
 
     name = _text(data, "name")
