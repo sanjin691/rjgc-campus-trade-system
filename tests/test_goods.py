@@ -134,6 +134,38 @@ class GoodsApiTests(unittest.TestCase):
         self.assertEqual(c.get(f'/api/goods/{gid}')[1]['data'],original)
         self.assertEqual(len(c.get('/api/goods')[1]['data']['items']),2)
 
+    def test_delete_owner_and_images(self):
+        c=self.client()
+        item=c.post('/api/goods',fields(images=[picture()]))[1]['data']
+        path=f"/api/goods/{item['id']}"
+        self.assertEqual(c.request('DELETE',path)[0],200)
+        self.assertEqual(c.get(path)[0],404)
+        self.assertEqual(c.request('DELETE',path)[0],404)
+        with connect(self.server.RequestHandlerClass.application.goods.store.path) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM goods_images WHERE goods_id=?',(item['id'],)).fetchone()[0],0)
+
+    def test_delete_authorization(self):
+        owner,other=self.client(),self.client()
+        item=owner.post('/api/goods',fields(images=[picture()]))[1]['data']
+        path=f"/api/goods/{item['id']}"
+        anonymous=ApiClient(owner.host,owner.port)
+        self.assertEqual(anonymous.request('DELETE',path)[0],401)
+        self.assertEqual(other.request('DELETE',path)[0],403)
+        self.assertEqual(owner.request('DELETE',path,csrf=False)[0],403)
+        self.assertEqual(owner.get(path)[1]['data'],item)
+
+    def test_delete_failure_rolls_back_images(self):
+        c=self.client()
+        item=c.post('/api/goods',fields(images=[picture()]))[1]['data']
+        store=self.server.RequestHandlerClass.application.goods.store
+        with connect(store.path) as conn:
+            conn.execute("CREATE TRIGGER fail_delete AFTER DELETE ON goods BEGIN SELECT RAISE(ABORT, 'injected'); END")
+        try:
+            self.assertNotEqual(c.request('DELETE',f"/api/goods/{item['id']}")[0],200)
+            self.assertEqual(c.get(f"/api/goods/{item['id']}")[1]['data'],item)
+        finally:
+            with connect(store.path) as conn:conn.execute('DROP TRIGGER fail_delete')
+
     def test_invalid_image_does_not_write(self):
         c=self.client()
         bad=dict(picture(),data='broken')

@@ -597,6 +597,12 @@ def api_goods_image(app, request):
     return Response(content=content, content_type=mime)
 
 
+@route('DELETE', r'/api/goods/(?P<id>[0-9]+)', auth=True)
+def api_goods_delete(app, request):
+    app.goods.delete(request.user['id'], int(request.params['id']))
+    return ok(None, message='商品已删除')
+
+
 @route("GET", r"/api/health")
 def api_health(app: Application, request: Request) -> Response:
     """健康检查，供部署探活使用。"""

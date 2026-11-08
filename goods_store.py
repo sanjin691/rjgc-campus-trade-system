@@ -69,6 +69,13 @@ class GoodsStore:
             self.owned(conn, row['goods_id'], user_id)
             return row['content'], row['mime']
 
+    def delete(self, goods_id, user_id):
+        with connect(self.path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            self.owned(conn, goods_id, user_id)
+            # FK cascade removes image contents and associations in this transaction.
+            conn.execute('DELETE FROM goods WHERE id=?', (goods_id,))
+
     @staticmethod
     def insert_images(conn, goods_id, images, start=0):
         for position, image in enumerate(images, start):

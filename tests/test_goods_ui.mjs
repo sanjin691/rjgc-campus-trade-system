@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-async function harness() {
+async function harness(confirmed = true) {
   const nodes = new Map();
   class Element {
     constructor() { this.value = ""; this.files = []; this.hidden = true; this.disabled = false; this.children = []; this.listeners = {}; this.attributes = {}; this.classes = new Set(); this.classList = { toggle: (name, active) => active ? this.classes.add(name) : this.classes.delete(name) }; }
@@ -28,7 +28,7 @@ async function harness() {
     get: async () => ({ items: [] }),
     request: () => { calls += 1; return new Promise((resolve) => { resolveRequest = resolve; }); },
   };
-  const context = vm.createContext({ document, URLSearchParams, location: { search: "" },
+  const context = vm.createContext({ document, URLSearchParams, location: { search: "" }, confirm: () => confirmed,
     Option: class extends Element { constructor(text, value) { super(); this.text = text; this.value = value; } },
     FileReader: class {}, setTimeout: (callback) => { expire = callback; return 1; }, clearTimeout() {},
   });
@@ -178,4 +178,45 @@ test("equal navigation controls indicate creation, list and editing selection", 
   await h.nodes.get("goods-list").children[0].children.at(-1).onclick();
   assert.equal(mine.classes.has("is-active"), true);
   assert.equal(create.classes.has("is-active"), false);
+});
+
+async function deleteFixture(confirmed = true) {
+  const h = await harness(confirmed);
+  h.api.get = async () => ({ items: [{ id: 7, name: 'Book', price: '1.00', images: [] }] });
+  await h.nodes.get('goods-mine').onclick();
+  h.remove = h.nodes.get('goods-list').children[0].children.at(-2);
+  return h;
+}
+
+test('cancel deletion sends no request', async () => {
+  const h = await deleteFixture(false);
+  await h.remove.onclick();
+  assert.equal(h.calls(), 0);
+  assert.equal(h.nodes.get('goods-count').textContent, '1');
+});
+
+test('confirmed deletion locks repeated clicks and refreshes list', async () => {
+  const h = await deleteFixture();
+  const task = h.remove.onclick();
+  await h.remove.onclick();
+  assert.equal(h.calls(), 1);
+  assert.equal(h.remove.disabled, true);
+  h.api.get = async () => ({ items: [] });
+  h.resolve(null);
+  await task;
+  assert.equal(h.nodes.get('goods-count').textContent, '0');
+  assert.match(h.nodes.get('goods-message').textContent, /删除成功/);
+});
+
+test('deletion timeout reports unknown and ignores a late response', async () => {
+  const h = await deleteFixture();
+  const task = h.remove.onclick();
+  h.expire();
+  await task;
+  assert.match(h.nodes.get('goods-message').textContent, /删除结果未知/);
+  assert.equal(h.remove.disabled, false);
+  h.resolve(null);
+  await new Promise(setImmediate);
+  assert.match(h.nodes.get('goods-message').textContent, /删除结果未知/);
+  assert.equal(h.nodes.get('goods-count').textContent, '1');
 });

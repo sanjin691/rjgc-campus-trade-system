@@ -71,6 +71,8 @@
 #goods-view .goods-empty p { color: #8a9bae; font-size: 13px; }
 #goods-view #goods-message { margin-bottom: 20px; border-radius: 9px; }
 #goods-view #goods-recovery { margin-bottom: 20px; border-radius: 9px; background: #fff; font-size: 12px; }
+#goods-view .goods-card > .goods-delete { background: #fff; border-color: #ecd9d6; color: #a65046; margin-bottom: 9px; }
+#goods-view .goods-card > .goods-delete:hover { background: #fff5f3; }
 @media (max-width: 760px) {
   #goods-view .goods-campus-badge { display: none; }
   #goods-view .goods-switch-button { padding: 15px 13px; gap: 10px; }

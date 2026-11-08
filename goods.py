@@ -12,7 +12,7 @@ ROUTE_PREFIX = "/api/goods"
 MODULE_FILE = "goods.py"
 
 #: 规划功能：暂为空，待实现时补充。
-FEATURES: list[str] = ['创建商品', '修改商品', '本人商品查询']
+FEATURES: list[str] = ['创建商品', '修改商品', '删除商品', '本人商品查询']
 
 
 def meta() -> dict:
@@ -39,3 +39,6 @@ class GoodsService:
         fields, keep, raw_images = validate_fields(body, creating=goods_id is None)
         images = validate_images(raw_images)
         return self.store.save(user_id, fields, keep, images, goods_id)
+
+    def delete(self, user_id, goods_id):
+        self.store.delete(goods_id, user_id)

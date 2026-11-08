@@ -65,6 +65,7 @@ function lock(value) {
   $("goods-cancel").disabled = value;
   $("goods-new").disabled = value;
   $("goods-mine").disabled = value;
+  $("goods-refresh").disabled = value;
   $("goods-save").textContent = value ? "正在提交…" : "保存商品";
   precheck();
 }
@@ -152,7 +153,10 @@ async function list() {
       const button = document.createElement("button");
       button.type = "button"; button.className = "button button-secondary"; button.textContent = "修改商品";
       button.onclick = () => edit(item.id);
-      card.append(image, name, price, meta, time, button);
+      const remove = document.createElement("button");
+      remove.type = "button"; remove.className = "button goods-delete"; remove.textContent = "删除商品";
+      remove.onclick = () => deleteGoods(item, remove);
+      card.append(image, name, price, meta, time, remove, button);
       return card;
     });
     if (!nodes.length) {
@@ -164,6 +168,38 @@ async function list() {
     $("goods-list").replaceChildren(...nodes);
   } catch (error) {
     if (epoch === generation && panel === "mine") { message(error.message); if (error.status === 401) recovery(); }
+  }
+}
+
+async function deleteGoods(item, button) {
+  if (pending || !confirm(`确定删除“${item.name}”？商品及关联图片将永久删除，无法恢复。`)) return;
+  const token = ++operation;
+  lock(true);
+  button.disabled = true;
+  button.textContent = "正在删除…";
+  message("");
+  $("goods-recovery").hidden = true;
+  let timer;
+  try {
+    await Promise.race([
+      api.request(`/api/goods/${item.id}`, { method: "DELETE" }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject({ unknown: true }), 10000); }),
+    ]);
+    if (token !== operation) return;
+    message("商品删除成功。", true);
+    await list();
+  } catch (error) {
+    if (token !== operation) return;
+    if (error.unknown || error.status === 0 || error.status >= 500) {
+      message("删除结果未知，请刷新“我的商品”确认，不能据此认定删除失败。");
+      recovery(null);
+    } else {
+      message(error.status === 401 ? "登录已失效，未执行删除。请重新登录后再操作。" : error.message || "删除未完成，请重试。");
+      if (error.status === 401) recovery(null);
+    }
+  } finally {
+    clearTimeout(timer);
+    if (token === operation) { lock(false); button.disabled = false; button.textContent = "删除商品"; }
   }
 }
 
