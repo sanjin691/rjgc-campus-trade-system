@@ -86,3 +86,75 @@ test("expired login keeps current text and offers recovery", async () => {
   assert.equal(h.nodes.get("goods-recovery").hidden, false);
   assert.match(h.nodes.get("goods-message").textContent, /本次内容未保存/);
 });
+
+test("creation exits the form without displaying the list; another creation starts empty", async () => {
+  const h = await harness();
+  h.nodes.get("goods-new").onclick();
+  h.form.elements.name.value = "First book";
+  assert.equal(h.form.hidden, false);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, true);
+  const task = h.form.listeners.submit({ preventDefault() {} });
+  await new Promise(setImmediate);
+  h.resolve({ id: 1, name: "First book", images: [] });
+  await task;
+  assert.equal(h.form.hidden, true);
+  assert.equal(h.nodes.get("goods-home").hidden, false);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, true);
+  assert.match(h.nodes.get("goods-message").textContent, /商品创建成功/);
+  h.nodes.get("goods-new").onclick();
+  assert.equal(h.form.hidden, false);
+  assert.equal(h.form.elements.name.value, "");
+  assert.equal(h.nodes.get("goods-form-title").textContent, "创建商品");
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, true);
+});
+
+test("my goods provides editing on a separate view and returns to the list after saving", async () => {
+  const h = await harness();
+  let item = { id: 12, name: "Book", category: "图书教材", condition: "全新", price: "10.00", description: "No notes", images: [], createdAt: "2026-11-08T00:00:00Z" };
+  h.api.get = async (path) => path === "/api/goods" ? { items: [item] } : item;
+  await h.nodes.get("goods-mine").onclick();
+  assert.equal(h.form.hidden, true);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, false);
+  const card = h.nodes.get("goods-list").children[0];
+  await card.children.at(-1).onclick();
+  assert.equal(h.form.hidden, false);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, true);
+  assert.equal(h.form.elements.name.value, "Book");
+  h.form.elements.price.value = "15";
+  const task = h.form.listeners.submit({ preventDefault() {} });
+  await new Promise(setImmediate);
+  item = { ...item, price: "15.00" };
+  h.resolve(item);
+  await task;
+  assert.equal(h.form.hidden, true);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, false);
+  assert.equal(h.nodes.get("goods-list").children[0].children[2].textContent, "¥ 15.00");
+  assert.match(h.nodes.get("goods-message").textContent, /商品修改成功/);
+});
+
+test("failed creation preserves the form and never exposes the list", async () => {
+  const h = await harness();
+  h.nodes.get("goods-new").onclick();
+  h.form.elements.name.value = "Unsaved book";
+  h.api.request = async () => { throw Object.assign(new Error("Invalid price"), { status: 422 }); };
+  await h.form.listeners.submit({ preventDefault() {} });
+  assert.equal(h.form.hidden, false);
+  assert.equal(h.form.elements.name.value, "Unsaved book");
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, true);
+  assert.equal(h.nodes.get("goods-save").disabled, false);
+});
+
+test("cancel creation exits to home while cancel modification returns to my goods", async () => {
+  const h = await harness();
+  h.nodes.get("goods-new").onclick();
+  await h.nodes.get("goods-cancel").onclick();
+  assert.equal(h.form.hidden, true);
+  assert.equal(h.nodes.get("goods-home").hidden, false);
+  const item = { id: 2, name: "Book", price: "1.00", images: [] };
+  h.api.get = async (path) => path === "/api/goods" ? { items: [item] } : item;
+  await h.nodes.get("goods-mine").onclick();
+  await h.nodes.get("goods-list").children[0].children.at(-1).onclick();
+  await h.nodes.get("goods-cancel").onclick();
+  assert.equal(h.form.hidden, true);
+  assert.equal(h.nodes.get("goods-mine-panel").hidden, false);
+});

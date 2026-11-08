@@ -11,6 +11,32 @@ let operation = 0;
 let generation = 0;
 let opened = false;
 let userId = null;
+let panel = "home";
+
+function showPanel(next) {
+  panel = next;
+  $("goods-home").hidden = next !== "home";
+  $("goods-mine-panel").hidden = next !== "mine";
+  form.hidden = next !== "editor";
+}
+
+function closeEditor(destination = "home") {
+  ++operation;
+  editing = null;
+  kept = [];
+  form.reset();
+  oldImages();
+  precheck();
+  $("goods-recovery").hidden = true;
+  showPanel(destination);
+}
+
+async function myGoods() {
+  if (pending) return;
+  closeEditor("mine");
+  message("");
+  await list();
+}
 
 for (const [key, values] of [["category", categories], ["condition", conditions]]) {
   form.elements[key].append(new Option("请选择", ""), ...values.map((value) => new Option(value, value)));
@@ -32,6 +58,7 @@ function lock(value) {
   $("goods-fields").disabled = value;
   $("goods-cancel").disabled = value;
   $("goods-new").disabled = value;
+  $("goods-mine").disabled = value;
   $("goods-save").textContent = value ? "正在提交…" : "保存商品";
   precheck();
 }
@@ -77,7 +104,7 @@ function editor(item = null) {
   }
   $("goods-form-title").textContent = editing ? `修改商品 #${editing}` : "创建商品";
   $("goods-recovery").hidden = true;
-  form.hidden = false;
+  showPanel("editor");
   message("");
   oldImages();
   precheck();
@@ -119,7 +146,7 @@ async function list() {
     if (!nodes.length) { const empty = document.createElement("p"); empty.textContent = "尚未发布商品，点击“创建商品”发布第一件闲置。"; nodes.push(empty); }
     $("goods-list").replaceChildren(...nodes);
   } catch (error) {
-    if (epoch === generation) { message(error.message); if (error.status === 401) recovery(); }
+    if (epoch === generation && panel === "mine") { message(error.message); if (error.status === 401) recovery(); }
   }
 }
 
@@ -155,14 +182,14 @@ form.addEventListener("submit", async (event) => {
       timer = setTimeout(() => reject(Object.assign(new Error("timeout"), { unknown: true })), 10000);
     });
     // Promise.race consumes late responses without letting them change the current UI.
-    const saved = await Promise.race([
+    await Promise.race([
       api.request(id ? `/api/goods/${id}` : "/api/goods", { method: id ? "PATCH" : "POST", body }), timeout,
     ]);
     if (token !== operation) return;
     lock(false);
-    editor(saved);
-    message(id ? "商品修改成功。" : "商品创建成功。", true);
-    await list();
+    closeEditor(id ? "mine" : "home");
+    message(id ? "商品修改成功。" : "商品创建成功。可点击“创建商品”继续发布，或点击“我的商品”查看。", true);
+    if (id) await list();
   } catch (error) {
     if (token !== operation) return;
     if (error.unknown || (sent && (error.status === 0 || error.status >= 500))) {
@@ -181,7 +208,14 @@ form.addEventListener("submit", async (event) => {
 
 $("goods-files").addEventListener("change", precheck);
 $("goods-new").onclick = () => editor();
-$("goods-cancel").onclick = () => { if (!pending) { ++operation; form.hidden = true; } };
+$("goods-mine").onclick = myGoods;
+$("goods-cancel").onclick = async () => {
+  if (pending) return;
+  const destination = editing ? "mine" : "home";
+  closeEditor(destination);
+  message("");
+  if (destination === "mine") await list();
+};
 $("goods-refresh").onclick = list;
 $("goods-session").onclick = async () => {
   try {
@@ -200,13 +234,15 @@ export const goodsPage = {
   async open() {
     if (opened) return;
     opened = true;
-    await list();
-    const id = new URLSearchParams(location.search).get("goodsId");
+    const params = new URLSearchParams(location.search);
+    const id = params.get("goodsId");
+    showPanel(id || params.has("goods") ? "mine" : "home");
+    if (panel === "mine") await list();
     if (opened && id && /^[0-9]+$/.test(id)) await edit(Number(id));
   },
   reset() {
     ++operation; ++generation; opened = false; editing = null; kept = []; userId = null;
-    form.reset(); form.hidden = true; lock(false); oldImages();
+    form.reset(); showPanel("home"); lock(false); oldImages();
     $("goods-list").replaceChildren(); $("goods-recovery").hidden = true; message("");
   },
 };

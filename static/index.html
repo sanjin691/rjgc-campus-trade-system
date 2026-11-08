@@ -346,13 +346,17 @@
       </div>
       <div class="goods-toolbar">
         <button class="button button-primary" id="goods-new" type="button">创建商品</button>
-        <button class="button button-secondary" id="goods-refresh" type="button">刷新我的商品</button>
+        <button class="button button-secondary" id="goods-mine" type="button">我的商品</button>
       </div>
       <div class="alert" id="goods-message" role="status" hidden></div>
       <div id="goods-recovery" hidden>
         <a id="goods-check" target="_blank" rel="noopener">在新页面查看商品确认结果</a>
         <a href="/?login=1" target="_blank" rel="noopener">在新页面重新登录</a>
         <button id="goods-session" class="button button-secondary button-small" type="button">登录后恢复操作</button>
+      </div>
+      <div class="panel goods-editor" id="goods-home">
+        <h2>管理我的闲置物品</h2>
+        <p>点击“创建商品”发布闲置物品，或点击“我的商品”查看和修改已发布的商品。</p>
       </div>
       <form class="panel goods-editor" id="goods-form" novalidate hidden>
         <h2 id="goods-form-title">创建商品</h2>
@@ -375,8 +379,14 @@
           <button id="goods-cancel" class="button button-secondary" type="button">取消编辑</button>
         </div>
       </form>
-      <div id="goods-list" class="goods-list" aria-live="polite">
-        <p class="empty-text">正在读取我的商品…</p>
+      <div id="goods-mine-panel" hidden>
+        <div class="goods-toolbar">
+          <h2>我的商品</h2>
+          <button class="button button-secondary" id="goods-refresh" type="button">刷新列表</button>
+        </div>
+        <div id="goods-list" class="goods-list" aria-live="polite">
+          <p class="empty-text">正在读取我的商品…</p>
+        </div>
       </div>
     </section>
 
