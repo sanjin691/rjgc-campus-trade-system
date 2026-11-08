@@ -1,4 +1,5 @@
 import { api, ApiError } from "./api.js";
+import { goodsPage } from "./goods.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -178,6 +179,7 @@ function switchTab(tab) {
 }
 
 function showAuth(tab = "login", message = "", type = "error") {
+  goodsPage.reset();
   state.user = null;
   state.csrf = null;
   state.view = "profile";
@@ -250,6 +252,7 @@ function fillProfileFields(user) {
 
 function showApp(data) {
   state.user = data.user;
+  goodsPage.bindUser(data.user.id);
   state.csrf = data.csrfToken;
   api.setCsrf(data.csrfToken);
 
@@ -265,7 +268,8 @@ function showApp(data) {
   // 子系统导航对所有登录用户可见；「用户管理」仅管理员可用
   ui.viewNav.hidden = false;
   ui.navAdmin.hidden = !isAdmin;
-  switchView(isAdmin ? "admin" : "profile");
+  const params = new URLSearchParams(location.search);
+  switchView(params.has("goods") || params.has("goodsId") ? "goods" : isAdmin ? "admin" : "profile");
 }
 
 const VIEWS = () => ({
@@ -304,6 +308,8 @@ function switchView(view) {
 
   if (view === "admin") {
     loadAdminUsers();
+  } else if (view === "goods") {
+    goodsPage.open();
   } else if (view === "profile") {
     closeAdminCreate();
     closeAdminEdit();

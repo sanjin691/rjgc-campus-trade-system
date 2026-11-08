@@ -342,10 +342,41 @@
     <section class="planned-view" id="goods-view" hidden>
       <div class="page-heading">
         <h1>商品管理子系统</h1>
-        <p>该子系统暂未实现，内容待补充。</p>
+        <p>发布闲置物品，维护自己发布的商品信息。</p>
       </div>
-      <div class="panel planned-panel">
-        <p class="empty-text">暂无内容</p>
+      <div class="goods-toolbar">
+        <button class="button button-primary" id="goods-new" type="button">创建商品</button>
+        <button class="button button-secondary" id="goods-refresh" type="button">刷新我的商品</button>
+      </div>
+      <div class="alert" id="goods-message" role="status" hidden></div>
+      <div id="goods-recovery" hidden>
+        <a id="goods-check" target="_blank" rel="noopener">在新页面查看商品确认结果</a>
+        <a href="/?login=1" target="_blank" rel="noopener">在新页面重新登录</a>
+        <button id="goods-session" class="button button-secondary button-small" type="button">登录后恢复操作</button>
+      </div>
+      <form class="panel goods-editor" id="goods-form" novalidate hidden>
+        <h2 id="goods-form-title">创建商品</h2>
+        <p>带 * 的项目为必填。仅可编辑自己发布的商品。</p>
+        <fieldset id="goods-fields">
+          <div class="goods-fields-grid">
+            <label class="field">商品名称 *<input name="name" required placeholder="1～50个字符"></label>
+            <label class="field">分类 *<select name="category" required></select></label>
+            <label class="field">价格（元）*<input name="price" inputmode="decimal" required placeholder="0.01～99999.99，最多两位小数"></label>
+            <label class="field">成色 *<select name="condition" required></select></label>
+          </div>
+          <label class="field">商品描述 *<textarea name="description" rows="4" required placeholder="1～500个字符，可填写型号或版次、使用情况、配件和已知缺陷"></textarea></label>
+          <p>图片选填，最终最多3张；每张不超过2 MiB（2,097,152字节），仅支持 JPG / JPEG / PNG，总像素不超过2000万。</p>
+          <div id="goods-old-images" class="goods-images"></div>
+          <label class="field">新增图片<input id="goods-files" type="file" accept=".jpg,.jpeg,.png" multiple></label>
+          <p id="goods-image-errors" class="goods-error" role="alert"></p>
+        </fieldset>
+        <div class="goods-toolbar">
+          <button id="goods-save" class="button button-primary" type="submit">保存商品</button>
+          <button id="goods-cancel" class="button button-secondary" type="button">取消编辑</button>
+        </div>
+      </form>
+      <div id="goods-list" class="goods-list" aria-live="polite">
+        <p class="empty-text">正在读取我的商品…</p>
       </div>
     </section>
 
