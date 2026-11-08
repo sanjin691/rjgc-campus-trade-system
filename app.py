@@ -1,9 +1,10 @@
-"""校园二手商品交易系统 · 用户管理子系统
+"""校园二手商品交易系统 · 用户与商品管理
 
 仅实现指定功能：
 - 用户注册
 - 用户登录 / 退出
 - 用户信息查看与修改
+- 商品创建、修改、本人商品查询及图片管理
 
 启动：python app.py
 """
@@ -65,7 +66,7 @@ MAX_BODY_BYTES = 64 * 1024
 MAX_GOODS_BODY_BYTES = 9 * 1024 * 1024
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 APP_NAME = "校园二手商品交易系统"
-APP_SUBTITLE = "用户管理子系统（V1.1）"
+APP_SUBTITLE = "用户与商品管理（V1.4）"
 
 #: 已实现的子系统；商品管理、交易管理见 goods.py / trade.py（本期仅预留位置）。
 USER_SUBSYSTEM = {
@@ -243,8 +244,9 @@ class Application:
             response = error(exc.status, exc.message)
         except GoodsAccessError as exc:
             response = error(exc.status, str(exc))
-        except sqlite3.IntegrityError:
-            response = error(409, "学号或邮箱已存在")
+        except sqlite3.IntegrityError as exc:
+            response = error(409, "账号仍有关联商品，不能删除" if "FOREIGN KEY" in str(exc)
+                             else "保存的数据存在冲突，请核对学号或邮箱等信息")
         except Exception:
             traceback.print_exc()
             response = error(500, "服务器内部错误，请稍后再试")

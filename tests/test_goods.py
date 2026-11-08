@@ -1,6 +1,7 @@
 """Product rule, HTTP authorization and transaction tests, using temporary data."""
 import base64
 import io
+import http.client
 import json
 import sqlite3
 import sys
@@ -17,6 +18,7 @@ from PIL import Image
 from test_api import ApiClient
 from app import create_server
 from database import connect
+from security import digest_token
 from goods_validation import validate_fields, validate_images
 from validators import ValidationError
 
@@ -66,6 +68,15 @@ class RuleTests(unittest.TestCase):
     def test_pixel_limit_before_load(self):
         with self.assertRaises(ValidationError):
             validate_images([picture(5001,4000)])
+
+    def test_exact_image_byte_limit(self):
+        item = picture()
+        raw = base64.b64decode(item['data'])
+        # PNG readers permit trailing bytes; retain a valid, decodable PNG.
+        item['data'] = base64.b64encode(raw + b'\0'*(2097152-len(raw))).decode()
+        self.assertEqual(len(validate_images([item])[0]['content']),2097152)
+        item['data'] = base64.b64encode(raw + b'\0'*(2097153-len(raw))).decode()
+        with self.assertRaises(ValidationError):validate_images([item])
 
 
 class GoodsApiTests(unittest.TestCase):
@@ -128,3 +139,51 @@ class GoodsApiTests(unittest.TestCase):
         bad=dict(picture(),data='broken')
         self.assertEqual(c.post('/api/goods',fields(images=[picture(),bad]))[0],422)
         self.assertEqual(c.get('/api/goods')[1]['data']['items'],[])
+
+    def test_three_maximum_images_and_private_image(self):
+        c, other = self.client(), self.client()
+        item=picture();raw=base64.b64decode(item['data'])
+        item['data']=base64.b64encode(raw+b'\0'*(2097152-len(raw))).decode()
+        status,response=c.post('/api/goods',fields(images=[item]*3))
+        self.assertEqual(status,201,response)
+        images=response['data']['images'];self.assertEqual(len(images),3)
+        for client,status in [(c,200),(other,403)]:
+            connection=http.client.HTTPConnection(c.host,c.port)
+            connection.request('GET',images[0]['url'],headers={'Cookie':f'user_session={client.cookie}'})
+            result=connection.getresponse();content=result.read();connection.close()
+            self.assertEqual(result.status,status)
+            if status==200:
+                self.assertEqual(len(content),2097152)
+                self.assertEqual(result.getheader('Content-Type'),'image/png')
+
+    def test_expired_session_cannot_save(self):
+        c=self.client()
+        gid=c.post('/api/goods',fields())[1]['data']['id']
+        with connect(self.server.RequestHandlerClass.application.goods.store.path) as conn:
+            conn.execute("UPDATE sessions SET expires_at='2000-01-01T00:00:00+00:00' WHERE token_hash=?",(digest_token(c.cookie),))
+        self.assertEqual(c.patch(f'/api/goods/{gid}',fields(name='不应修改'))[0],401)
+
+    def test_request_framing_limits(self):
+        def raw(path,headers):
+            conn=http.client.HTTPConnection('127.0.0.1',self.server.server_address[1],timeout=3)
+            conn.putrequest('POST',path)
+            for name,value in headers:conn.putheader(name,value)
+            conn.endheaders()
+            response=conn.getresponse();response.read();conn.close()
+            return response.status
+        self.assertEqual(raw('/api/goods',[]),411)
+        self.assertEqual(raw('/api/goods',[('Content-Length','1'),('Content-Length','2')]),400)
+        self.assertEqual(raw('/api/goods',[('Transfer-Encoding','chunked')]),400)
+        self.assertEqual(raw('/api/goods',[('Content-Length','-1')]),400)
+        self.assertEqual(raw('/api/goods',[('Content-Length',str(9*1024*1024+1))]),413)
+        self.assertEqual(raw('/api/auth/login',[('Content-Length',str(64*1024+1))]),413)
+        self.assertEqual(raw('/api/goods',[('Content-Encoding','gzip'),('Content-Length','0')]),415)
+
+    def test_account_with_products_cannot_be_deleted(self):
+        c=self.client();gid=c.post('/api/goods',fields())[1]['data']['id']
+        user_id=c.get('/api/auth/me')[1]['data']['user']['id']
+        admin=ApiClient(c.host,c.port);admin.login('ADMIN001','Admin@123')
+        status,response=admin.request('DELETE',f'/api/admin/users/{user_id}')
+        self.assertEqual(status,409,response)
+        self.assertIn('关联商品',response['message'])
+        self.assertEqual(c.get(f'/api/goods/{gid}')[0],200)
