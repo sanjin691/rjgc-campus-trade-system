@@ -6,7 +6,7 @@ from validators import ValidationError
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS goods (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
- publisher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ publisher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  name TEXT NOT NULL, category TEXT NOT NULL, price_cents INTEGER NOT NULL,
  condition TEXT NOT NULL, description TEXT NOT NULL,
  created_at TEXT NOT NULL, updated_at TEXT NOT NULL

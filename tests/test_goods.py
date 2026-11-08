@@ -163,6 +163,14 @@ class GoodsApiTests(unittest.TestCase):
             conn.execute("UPDATE sessions SET expires_at='2000-01-01T00:00:00+00:00' WHERE token_hash=?",(digest_token(c.cookie),))
         self.assertEqual(c.patch(f'/api/goods/{gid}',fields(name='不应修改'))[0],401)
 
+    def test_goods_do_not_block_existing_user_deletion(self):
+        c=self.client();gid=c.post('/api/goods',fields())[1]['data']['id']
+        user_id=c.get('/api/auth/me')[1]['data']['user']['id']
+        admin=ApiClient(c.host,c.port);admin.login('ADMIN001','Admin@123')
+        self.assertEqual(admin.request('DELETE',f'/api/admin/users/{user_id}')[0],200)
+        with connect(self.server.RequestHandlerClass.application.goods.store.path) as conn:
+            self.assertIsNone(conn.execute('SELECT id FROM goods WHERE id=?',(gid,)).fetchone())
+
     def test_request_framing_limits(self):
         def raw(path,headers):
             conn=http.client.HTTPConnection('127.0.0.1',self.server.server_address[1],timeout=3)
@@ -178,12 +186,3 @@ class GoodsApiTests(unittest.TestCase):
         self.assertEqual(raw('/api/goods',[('Content-Length',str(9*1024*1024+1))]),413)
         self.assertEqual(raw('/api/auth/login',[('Content-Length',str(64*1024+1))]),413)
         self.assertEqual(raw('/api/goods',[('Content-Encoding','gzip'),('Content-Length','0')]),415)
-
-    def test_account_with_products_cannot_be_deleted(self):
-        c=self.client();gid=c.post('/api/goods',fields())[1]['data']['id']
-        user_id=c.get('/api/auth/me')[1]['data']['user']['id']
-        admin=ApiClient(c.host,c.port);admin.login('ADMIN001','Admin@123')
-        status,response=admin.request('DELETE',f'/api/admin/users/{user_id}')
-        self.assertEqual(status,409,response)
-        self.assertIn('关联商品',response['message'])
-        self.assertEqual(c.get(f'/api/goods/{gid}')[0],200)

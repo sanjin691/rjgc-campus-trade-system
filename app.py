@@ -244,9 +244,8 @@ class Application:
             response = error(exc.status, exc.message)
         except GoodsAccessError as exc:
             response = error(exc.status, str(exc))
-        except sqlite3.IntegrityError as exc:
-            response = error(409, "账号仍有关联商品，不能删除" if "FOREIGN KEY" in str(exc)
-                             else "保存的数据存在冲突，请核对学号或邮箱等信息")
+        except sqlite3.IntegrityError:
+            response = error(409, "学号或邮箱已存在")
         except Exception:
             traceback.print_exc()
             response = error(500, "服务器内部错误，请稍后再试")
