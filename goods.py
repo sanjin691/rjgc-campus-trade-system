@@ -1,21 +1,18 @@
-"""商品管理子系统（预留占位，内容为空）。
-
-本文件只占住位置：商品管理子系统尚未实现，暂不包含任何功能、接口或数据模型。
-后续实现时在 app.py 中把 /api/goods/** 的占位路由换成真实处理函数，
-并在本文件中补充相应的业务代码即可。
-"""
+"""商品服务：可信身份、共用规则及整体保存。"""
 
 from __future__ import annotations
+from goods_store import GoodsStore
+from goods_validation import validate_fields, validate_images
 
 NAME = "商品管理子系统"
 KEY = "goods"
-STATUS = "planned"
-STATUS_LABEL = "规划中"
+STATUS = "available"
+STATUS_LABEL = "已实现"
 ROUTE_PREFIX = "/api/goods"
 MODULE_FILE = "goods.py"
 
 #: 规划功能：暂为空，待实现时补充。
-FEATURES: list[str] = []
+FEATURES: list[str] = ['创建商品', '修改商品', '本人商品查询']
 
 
 def meta() -> dict:
@@ -27,6 +24,18 @@ def meta() -> dict:
         "statusLabel": STATUS_LABEL,
         "routePrefix": ROUTE_PREFIX,
         "module": MODULE_FILE,
-        "features": [],
+        "features": FEATURES,
         "plannedSchema": "",
     }
+
+
+class GoodsService:
+    def __init__(self, path):
+        self.store = GoodsStore(path)
+
+    def save(self, user_id, body, goods_id=None):
+        if goods_id is not None:
+            self.store.get(goods_id, user_id)
+        fields, keep, raw_images = validate_fields(body, creating=goods_id is None)
+        images = validate_images(raw_images)
+        return self.store.save(user_id, fields, keep, images, goods_id)

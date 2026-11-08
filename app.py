@@ -31,6 +31,7 @@ from typing import Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
 import goods
+from goods_store import GoodsAccessError
 import trade
 from database import (
     DEFAULT_ADMIN_PASSWORD,
@@ -61,6 +62,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DEFAULT_DB = BASE_DIR / "data" / "user_management.db"
 MAX_BODY_BYTES = 64 * 1024
+MAX_GOODS_BODY_BYTES = 9 * 1024 * 1024
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 APP_NAME = "校园二手商品交易系统"
 APP_SUBTITLE = "用户管理子系统（V1.1）"
@@ -119,6 +121,8 @@ class Response:
     status: int = 200
     payload: dict | None = None
     headers: list[tuple[str, str]] = field(default_factory=list)
+    content: bytes | None = None
+    content_type: str = 'application/json; charset=utf-8'
 
 
 def ok(data=None, message: str | None = None, status: int = 200, headers=None) -> Response:
@@ -224,6 +228,7 @@ class Application:
         self.users = UserStore(db_path)
         self.sessions = SessionStore(db_path)
         self.throttle = LoginThrottle()
+        self.goods = goods.GoodsService(db_path)
 
     def dispatch(self, request: Request) -> Response:
         """请求入口：认证 → 路由 → 统一异常映射。"""
@@ -236,6 +241,8 @@ class Application:
             response = error(422, exc.message, exc.errors)
         except ApiError as exc:
             response = error(exc.status, exc.message)
+        except GoodsAccessError as exc:
+            response = error(exc.status, str(exc))
         except sqlite3.IntegrityError:
             response = error(409, "学号或邮箱已存在")
         except Exception:
@@ -560,8 +567,33 @@ def _register_planned_subsystem(meta: dict) -> None:
         ROUTES.append(Route(method, pattern, handler))
 
 
-_register_planned_subsystem(goods.meta())
 _register_planned_subsystem(trade.meta())
+
+
+@route('GET', r'/api/goods', auth=True)
+def api_goods_list(app, request):
+    return ok({'items': app.goods.store.list(request.user['id'])})
+
+
+@route('GET', r'/api/goods/(?P<id>[0-9]+)', auth=True)
+def api_goods_detail(app, request):
+    return ok(app.goods.store.get(int(request.params['id']), request.user['id']))
+
+
+@route('POST', r'/api/goods', auth=True)
+def api_goods_create(app, request):
+    return ok(app.goods.save(request.user['id'], request.body), status=201)
+
+
+@route('PATCH', r'/api/goods/(?P<id>[0-9]+)', auth=True)
+def api_goods_update(app, request):
+    return ok(app.goods.save(request.user['id'], request.body, int(request.params['id'])))
+
+
+@route('GET', r'/api/goods/images/(?P<id>[0-9]+)', auth=True)
+def api_goods_image(app, request):
+    content, mime = app.goods.store.image(int(request.params['id']), request.user['id'])
+    return Response(content=content, content_type=mime)
 
 
 @route("GET", r"/api/health")
@@ -673,6 +705,19 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_api(self, method: str, path: str, query_string: str) -> None:
         """读取并限制请求体大小，组装 Request 后交给 dispatch。"""
         raw_body = b""
+        self.connection.settimeout(10)
+        if self.headers.get('Transfer-Encoding') or len(self.headers.get_all('Content-Length', [])) > 1:
+            self.close_connection = True
+            self._send_json(error(400, '不支持的请求长度或传输形式'))
+            return
+        if self.headers.get('Content-Encoding', 'identity').lower() != 'identity':
+            self.close_connection = True
+            self._send_json(error(415, '不接受压缩请求体'))
+            return
+        if method in {'POST', 'PATCH', 'PUT'} and self.headers.get('Content-Length') is None:
+            self.close_connection = True
+            self._send_json(error(411, '请求必须声明长度'))
+            return
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
         except ValueError:
@@ -683,12 +728,23 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             self._send_json(error(400, "请求格式不正确"))
             return
-        if length > MAX_BODY_BYTES:
+        limit = MAX_GOODS_BODY_BYTES if ((method == 'POST' and path == '/api/goods') or
+                  (method == 'PATCH' and re.fullmatch(r'/api/goods/[0-9]+', path))) else MAX_BODY_BYTES
+        if length > limit:
             self.close_connection = True
             self._send_json(error(413, "请求内容过大"))
             return
         if length:
-            raw_body = self.rfile.read(length)
+            try:
+                raw_body = self.rfile.read(length)
+            except (TimeoutError, OSError):
+                self.close_connection = True
+                self._send_json(error(408, '请求体读取超时或中断'))
+                return
+            if len(raw_body) != length:
+                self.close_connection = True
+                self._send_json(error(400, '请求体长度不符'))
+                return
 
         request = Request(
             method=method,
@@ -758,7 +814,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _send_json(self, response: Response) -> None:
         """输出 JSON 响应并附加安全响应头。"""
-        body = json.dumps(
+        body = response.content if response.content is not None else json.dumps(
             response.payload, ensure_ascii=False, separators=(",", ":")
         ).encode("utf-8")
         try:
@@ -766,7 +822,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         except ValueError:
             status = 500
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Vary", "Cookie")

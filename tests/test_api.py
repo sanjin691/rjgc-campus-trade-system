@@ -468,18 +468,18 @@ class UserManagementApiTests(unittest.TestCase):
         items = {item["key"]: item for item in data["data"]["items"]}
         self.assertEqual(set(items), {"user", "goods", "trade"})
         self.assertEqual(items["user"]["status"], "available")
-        for key in ("goods", "trade"):
+        self.assertEqual(items['goods']['status'], 'available')
+        for key in ("trade",):
             self.assertEqual(items[key]["status"], "planned")
             self.assertEqual(items[key]["statusLabel"], "规划中")
             # 另外两个子系统只占位，内容为空
             self.assertEqual(items[key]["features"], [])
             self.assertEqual(items[key]["plannedSchema"], "")
 
-        for path in ("/api/goods", "/api/goods/123", "/api/goods/create"):
+        for path in ("/api/goods", "/api/goods/123"):
             status, data = client.get(path)
-            self.assertEqual(status, 501, path)
+            self.assertEqual(status, 401, path)
             self.assertFalse(data["ok"])
-            self.assertIn("商品管理子系统", data["message"])
 
         status, data = client.post("/api/trade/apply", {"goodsId": 1})
         self.assertEqual(status, 501)
