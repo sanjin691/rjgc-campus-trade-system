@@ -18,6 +18,12 @@ function showPanel(next) {
   $("goods-home").hidden = next !== "home";
   $("goods-mine-panel").hidden = next !== "mine";
   form.hidden = next !== "editor";
+  const creating = next === "editor" && !editing;
+  const mine = next === "mine" || (next === "editor" && Boolean(editing));
+  for (const [id, active] of [["goods-new", creating], ["goods-mine", mine]]) {
+    $(id).classList.toggle("is-active", active);
+    $(id).setAttribute("aria-pressed", String(active));
+  }
 }
 
 function closeEditor(destination = "home") {
@@ -66,6 +72,9 @@ function lock(value) {
 function precheck() {
   const files = [...$("goods-files").files];
   const errors = [];
+  $("goods-upload-summary").textContent = files.length
+    ? `已选择${files.length}张新增图片：${files.map((file) => file.name).join("、")}`
+    : "未选择新增图片";
   if (files.length + kept.length > 3) errors.push(`最多3张，当前共${files.length + kept.length}张，请移除多余图片`);
   files.forEach((file, index) => {
     if (!/\.(jpg|jpeg|png)$/i.test(file.name)) errors.push(`第${index + 1}张 ${file.name}：格式不支持`);
@@ -128,6 +137,7 @@ async function list() {
   try {
     const { items } = await api.get("/api/goods");
     if (epoch !== generation) return;
+    $("goods-count").textContent = String(items.length);
     const nodes = items.map((item) => {
       const card = document.createElement("article");
       card.className = "panel goods-card";
@@ -137,13 +147,20 @@ async function list() {
       const name = document.createElement("h2"); name.textContent = item.name;
       const price = document.createElement("strong"); price.textContent = `¥ ${item.price}`;
       const time = document.createElement("p"); time.textContent = `发布于 ${new Date(item.createdAt).toLocaleString()}`;
+      const meta = document.createElement("div"); meta.className = "goods-card-meta";
+      meta.textContent = [item.category, item.condition].filter(Boolean).join(" · ");
       const button = document.createElement("button");
       button.type = "button"; button.className = "button button-secondary"; button.textContent = "修改商品";
       button.onclick = () => edit(item.id);
-      card.append(image, name, price, time, button);
+      card.append(image, name, price, meta, time, button);
       return card;
     });
-    if (!nodes.length) { const empty = document.createElement("p"); empty.textContent = "尚未发布商品，点击“创建商品”发布第一件闲置。"; nodes.push(empty); }
+    if (!nodes.length) {
+      const empty = document.createElement("div"); empty.className = "goods-empty";
+      const title = document.createElement("h3"); title.textContent = "你的好物展台，等待第一件闲置";
+      const description = document.createElement("p"); description.textContent = "点击上方“创建商品”，从一本教材、一件闲置开始。";
+      empty.append(title, description); nodes.push(empty);
+    }
     $("goods-list").replaceChildren(...nodes);
   } catch (error) {
     if (epoch === generation && panel === "mine") { message(error.message); if (error.status === 401) recovery(); }
@@ -244,5 +261,6 @@ export const goodsPage = {
     ++operation; ++generation; opened = false; editing = null; kept = []; userId = null;
     form.reset(); showPanel("home"); lock(false); oldImages();
     $("goods-list").replaceChildren(); $("goods-recovery").hidden = true; message("");
+    $("goods-count").textContent = "0";
   },
 };

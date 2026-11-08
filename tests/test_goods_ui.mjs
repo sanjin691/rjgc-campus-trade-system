@@ -7,7 +7,8 @@ import vm from "node:vm";
 async function harness() {
   const nodes = new Map();
   class Element {
-    constructor() { this.value = ""; this.files = []; this.hidden = true; this.disabled = false; this.children = []; this.listeners = {}; this.classList = { toggle() {} }; }
+    constructor() { this.value = ""; this.files = []; this.hidden = true; this.disabled = false; this.children = []; this.listeners = {}; this.attributes = {}; this.classes = new Set(); this.classList = { toggle: (name, active) => active ? this.classes.add(name) : this.classes.delete(name) }; }
+    setAttribute(name, value) { this.attributes[name] = value; }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = children; }
     addEventListener(name, callback) { this.listeners[name] = callback; }
@@ -157,4 +158,24 @@ test("cancel creation exits to home while cancel modification returns to my good
   await h.nodes.get("goods-cancel").onclick();
   assert.equal(h.form.hidden, true);
   assert.equal(h.nodes.get("goods-mine-panel").hidden, false);
+});
+
+test("equal navigation controls indicate creation, list and editing selection", async () => {
+  const h = await harness();
+  await h.page.open();
+  const create = h.nodes.get("goods-new"), mine = h.nodes.get("goods-mine");
+  assert.equal(create.attributes["aria-pressed"], "false");
+  assert.equal(mine.attributes["aria-pressed"], "false");
+  create.onclick();
+  assert.equal(create.classes.has("is-active"), true);
+  assert.equal(mine.classes.has("is-active"), false);
+  const item = { id: 2, name: "Book", images: [], price: "10.00" };
+  h.api.get = async (path) => path === "/api/goods" ? { items: [item] } : item;
+  await mine.onclick();
+  assert.equal(create.attributes["aria-pressed"], "false");
+  assert.equal(mine.attributes["aria-pressed"], "true");
+  assert.equal(h.nodes.get("goods-count").textContent, "1");
+  await h.nodes.get("goods-list").children[0].children.at(-1).onclick();
+  assert.equal(mine.classes.has("is-active"), true);
+  assert.equal(create.classes.has("is-active"), false);
 });

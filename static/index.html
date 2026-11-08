@@ -7,6 +7,7 @@
   <title>校园二手商品交易系统</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/goods.css">
 </head>
 <body>
   <header class="site-header">
@@ -340,13 +341,13 @@
     </section>
 
     <section class="planned-view" id="goods-view" hidden>
-      <div class="page-heading">
-        <h1>商品管理子系统</h1>
-        <p>发布闲置物品，维护自己发布的商品信息。</p>
+      <div class="goods-heading">
+        <div><p class="goods-eyebrow">CAMPUS RESALE / 卖家中心</p><h1>让闲置，遇见下一位主人。</h1><p>从一本教材开始，让校园里的好物继续发挥价值。</p></div>
+        <span class="goods-campus-badge">校园二手 · 个人发布</span>
       </div>
-      <div class="goods-toolbar">
-        <button class="button button-primary" id="goods-new" type="button">创建商品</button>
-        <button class="button button-secondary" id="goods-mine" type="button">我的商品</button>
+      <div class="goods-switcher" aria-label="商品管理功能">
+        <button class="goods-switch-button" id="goods-new" type="button" aria-pressed="false"><span class="goods-switch-icon" aria-hidden="true">＋</span><span>创建商品<small>发布一件新的闲置</small></span><span class="goods-switch-arrow" aria-hidden="true">↗</span></button>
+        <button class="goods-switch-button" id="goods-mine" type="button" aria-pressed="false"><span class="goods-switch-icon" aria-hidden="true">▦</span><span>我的商品<small>查看与维护已发布商品</small></span><span class="goods-switch-arrow" aria-hidden="true">↗</span></button>
       </div>
       <div class="alert" id="goods-message" role="status" hidden></div>
       <div id="goods-recovery" hidden>
@@ -354,34 +355,42 @@
         <a href="/?login=1" target="_blank" rel="noopener">在新页面重新登录</a>
         <button id="goods-session" class="button button-secondary button-small" type="button">登录后恢复操作</button>
       </div>
-      <div class="panel goods-editor" id="goods-home">
-        <h2>管理我的闲置物品</h2>
-        <p>点击“创建商品”发布闲置物品，或点击“我的商品”查看和修改已发布的商品。</p>
+      <div id="goods-home" class="goods-welcome">
+        <div class="goods-welcome-copy"><span class="goods-label">给好物一个新故事</span><h2>你的闲置，<br>也许正是别人的需要。</h2><p>拍下实物、写清使用情况，再定一个合适的价格。<br>发布成功后，可在“我的商品”中随时查看和修改。</p><div class="goods-welcome-foot"><span>01 填写信息</span><span>02 添加照片</span><span>03 完成发布</span></div></div>
+        <div class="goods-art" aria-hidden="true"><svg viewBox="0 0 340 260" fill="none"><ellipse cx="175" cy="228" rx="128" ry="16" fill="#D5DFEB"/><rect x="69" y="81" width="125" height="145" rx="12" fill="#315AA3" transform="rotate(-12 69 81)"/><path d="m92 97 77-16m-72 35 54-11" stroke="#AEC9F9" stroke-width="5" stroke-linecap="round"/><rect x="117" y="79" width="129" height="155" rx="10" fill="#FFFDF8" transform="rotate(8 117 79)"/><path d="m136 108 72 10m-75 7 65 9m-68 9 46 7" stroke="#C5D3E7" stroke-width="5" stroke-linecap="round"/><path d="m181 153 94-7 14 81-116 3 8-77Z" fill="#E5AE65"/><path d="M205 150c-2-42 48-43 47-2" stroke="#A16A2E" stroke-width="6"/><circle cx="267" cy="69" r="31" fill="#DCECCF"/><path d="m254 69 9 9 18-20" stroke="#557844" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M61 54v16m-8-8h16m220 51v12m-6-6h12" stroke="#879FBD" stroke-width="3" stroke-linecap="round"/></svg></div>
       </div>
-      <form class="panel goods-editor" id="goods-form" novalidate hidden>
-        <h2 id="goods-form-title">创建商品</h2>
-        <p>带 * 的项目为必填。仅可编辑自己发布的商品。</p>
+      <form class="goods-editor" id="goods-form" novalidate hidden>
+        <div class="goods-section-heading"><div><span class="goods-eyebrow">PRODUCT INFORMATION</span><h2 id="goods-form-title">创建商品</h2><p>完善商品信息，让买家更了解你的好物。</p></div><span class="goods-required-note">* 为必填项</span></div>
+        <div class="goods-compose-layout">
         <fieldset id="goods-fields">
+          <h3 class="goods-block-title"><span>01</span> 基本信息</h3>
           <div class="goods-fields-grid">
             <label class="field">商品名称 *<input name="name" required placeholder="1～50个字符"></label>
             <label class="field">分类 *<select name="category" required></select></label>
             <label class="field">价格（元）*<input name="price" inputmode="decimal" required placeholder="0.01～99999.99，最多两位小数"></label>
             <label class="field">成色 *<select name="condition" required></select></label>
           </div>
-          <label class="field">商品描述 *<textarea name="description" rows="4" required placeholder="1～500个字符，可填写型号或版次、使用情况、配件和已知缺陷"></textarea></label>
-          <p>图片选填，最终最多3张；每张不超过2 MiB（2,097,152字节），仅支持 JPG / JPEG / PNG，总像素不超过2000万。</p>
+          <label class="field goods-description">商品描述 *<textarea name="description" rows="5" required placeholder="说说这件商品的故事：型号或版次、使用情况、配件，以及已知的小缺陷（1～500个字符）"></textarea></label>
+          <h3 class="goods-block-title"><span>02</span> 商品图片 <small>选填</small></h3>
+          <p class="goods-upload-hint">最多3张，单张不超过2 MiB（2,097,152字节）；JPG / JPEG / PNG，总像素不超过2000万。</p>
           <div id="goods-old-images" class="goods-images"></div>
-          <label class="field">新增图片<input id="goods-files" type="file" accept=".jpg,.jpeg,.png" multiple></label>
+          <label class="goods-upload"><span class="goods-upload-plus" aria-hidden="true">＋</span><strong>选择商品照片</strong><span>实物照片能更直观地展示商品细节</span><input id="goods-files" type="file" accept=".jpg,.jpeg,.png" multiple aria-label="选择商品照片"></label>
+          <p id="goods-upload-summary" class="goods-upload-hint" aria-live="polite">未选择新增图片</p>
           <p id="goods-image-errors" class="goods-error" role="alert"></p>
         </fieldset>
-        <div class="goods-toolbar">
-          <button id="goods-save" class="button button-primary" type="submit">保存商品</button>
+        <aside class="goods-guide"><span class="goods-label">发布小贴士</span><h3>把信息说清楚，<br>让好物更有吸引力。</h3><div><b>真实描述</b><p>写明使用痕迹与已知缺陷，减少沟通误会。</p></div><div><b>合理定价</b><p>结合原价、成色与使用年限，给出你的预期价格。</p></div><div><b>清晰实拍</b><p>优先选择整体、细节和配件照片，不上传私人信息。</p></div><p class="goods-guide-note">仅你本人可以修改自己发布的商品。</p></aside>
+        </div>
+        <div class="goods-form-footer">
+          <p>确认信息无误后保存，成功后将自动退出表单。</p>
+          <div class="goods-toolbar">
           <button id="goods-cancel" class="button button-secondary" type="button">取消编辑</button>
+          <button id="goods-save" class="button button-primary" type="submit">保存商品</button>
+          </div>
         </div>
       </form>
       <div id="goods-mine-panel" hidden>
-        <div class="goods-toolbar">
-          <h2>我的商品</h2>
+        <div class="goods-section-heading goods-list-heading">
+          <div><span class="goods-eyebrow">MY PRODUCTS</span><h2>我的商品 <span id="goods-count" class="goods-count">0</span></h2><p>集中管理你的发布记录，随时更新商品信息。</p></div>
           <button class="button button-secondary" id="goods-refresh" type="button">刷新列表</button>
         </div>
         <div id="goods-list" class="goods-list" aria-live="polite">
