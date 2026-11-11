@@ -24,11 +24,12 @@ async function harness(confirmed = true) {
   let expire;
   let calls = 0;
   let resolveRequest;
+  const confirmations = [];
   const api = {
     get: async () => ({ items: [] }),
     request: () => { calls += 1; return new Promise((resolve) => { resolveRequest = resolve; }); },
   };
-  const context = vm.createContext({ document, URLSearchParams, location: { search: "" }, confirm: () => confirmed,
+  const context = vm.createContext({ document, URLSearchParams, location: { search: "" }, confirm: (text) => { confirmations.push(text); return confirmed; },
     Option: class extends Element { constructor(text, value) { super(); this.text = text; this.value = value; } },
     FileReader: class {}, setTimeout: (callback) => { expire = callback; return 1; }, clearTimeout() {},
   });
@@ -37,7 +38,7 @@ async function harness(confirmed = true) {
   await source.link(() => dependency);
   await source.evaluate();
   return { nodes, form, page: source.namespace.goodsPage, calls: () => calls,
-    expire: () => expire(), resolve: (data) => resolveRequest(data), api };
+    expire: () => expire(), resolve: (data) => resolveRequest(data), api, confirmations };
 }
 
 test("ten consecutive submits send one request", async () => {
@@ -219,4 +220,40 @@ test('deletion timeout reports unknown and ignores a late response', async () =>
   await new Promise(setImmediate);
   assert.match(h.nodes.get('goods-message').textContent, /删除结果未知/);
   assert.equal(h.nodes.get('goods-count').textContent, '1');
+});
+
+test('cancel modification confirmation keeps inputs and sends no request', async () => {
+  const h = await harness(false);
+  const item = { id: 12, name: 'Book', price: '10.00', images: [] };
+  h.api.get = async path => path === '/api/goods' ? { items: [item] } : item;
+  await h.nodes.get('goods-mine').onclick();
+  await h.nodes.get('goods-list').children[0].children.at(-1).onclick();
+  h.form.elements.price.value = '15';
+  await h.form.listeners.submit({ preventDefault() {} });
+  assert.equal(h.calls(), 0);
+  assert.equal(h.form.hidden, false);
+  assert.equal(h.form.elements.price.value, '15');
+  assert.equal(h.nodes.get('goods-save').disabled, false);
+  assert.match(h.confirmations[0], /确定保存本次商品修改/);
+});
+
+test('accept modification confirmation saves exactly once; creation does not confirm', async () => {
+  const h = await harness(true);
+  const item = { id: 12, name: 'Book', price: '10.00', images: [] };
+  h.api.get = async path => path === '/api/goods' ? { items: [item] } : item;
+  await h.nodes.get('goods-mine').onclick();
+  await h.nodes.get('goods-list').children[0].children.at(-1).onclick();
+  const saving = h.form.listeners.submit({ preventDefault() {} });
+  await new Promise(setImmediate);
+  await h.form.listeners.submit({ preventDefault() {} });
+  assert.equal(h.calls(), 1);
+  assert.equal(h.confirmations.length, 1);
+  h.resolve(item);
+  await saving;
+  h.nodes.get('goods-new').onclick();
+  const creating = h.form.listeners.submit({ preventDefault() {} });
+  await new Promise(setImmediate);
+  assert.equal(h.confirmations.length, 1);
+  h.resolve({ ...item, id: 13 });
+  await creating;
 });
