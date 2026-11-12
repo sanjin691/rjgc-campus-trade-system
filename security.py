@@ -50,6 +50,7 @@ def hash_password(password: str) -> str:
     返回 ``pbkdf2_sha256$迭代次数$盐$摘要`` 形式的字符串：算法与迭代次数随哈希
     一起存储，将来调整参数时老密码仍可校验。
     """
+    # 每个用户一个随机盐：同一个密码也会算出不同哈希，彩虹表失效
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS
@@ -73,6 +74,7 @@ def verify_password(password: str, encoded: str) -> bool:
             bytes.fromhex(salt_hex),
             int(iterations),
         )
+        # 常量时间比较：不让响应时间泄露“前几位对不对”
         return hmac.compare_digest(digest.hex(), digest_hex)
     except (ValueError, TypeError):
         return False
@@ -93,6 +95,7 @@ def digest_token(token: str) -> str:
 
     数据库只保存摘要：即使数据库泄露，攻击者也无法据此伪造 Cookie。
     """
+    # 只存摘要不存原令牌：数据库泄露也无法伪造 Cookie
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

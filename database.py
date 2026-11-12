@@ -68,9 +68,11 @@ def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(Path(path), timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    # 并发写入最多等 5 秒，避免立刻抛 database is locked
     connection.execute("PRAGMA busy_timeout = 5000")
     try:
         yield connection
+        # 正常结束提交；下面一行在异常时回滚，保证不会“改一半”
         connection.commit()
     except Exception:
         connection.rollback()
@@ -318,6 +320,7 @@ class UserStore:
         因此这里不需要手工清理会话。
         """
         with connect(self.path) as connection:
+            # 会话由外键 ON DELETE CASCADE 一并删除，这里不用手工清
             connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -393,6 +396,7 @@ class SessionStore:
         让用户不必重新登录，同时把其他设备踢下线。
         """
         with connect(self.path) as connection:
+            # 保留当前设备的令牌：本人改密后本机不用重新登录
             if keep_token_hash:
                 connection.execute(
                     "DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?",

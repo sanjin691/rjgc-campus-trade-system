@@ -220,7 +220,6 @@ form.addEventListener("submit", async (event) => {
   for (const key of ["name", "category", "price", "condition", "description"]) body[key] = form.elements[key].value;
   const files = [...$("goods-files").files];
   const id = editing;
-  if (id && !confirm("确定保存本次商品修改？保存后将替换原有商品信息。")) return;
   if (id) body.keepImageIds = kept.map((image) => image.id);
   const token = ++operation;
   lock(true);
